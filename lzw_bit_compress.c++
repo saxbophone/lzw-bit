@@ -125,7 +125,7 @@ void print_bits(Iterable bits) {
 std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
     std::size_t bits_needed = std::ceil(std::log2(space_size));
     std::vector<bool> output;
-    std::cout << symbol << " -> ";
+    // std::cout << symbol << " -> ";
     for (std::uintmax_t p = 1 << (bits_needed - 1); p > 1; p >>= 1) {
         if (symbol & p) {
             output.push_back(1);
@@ -135,14 +135,17 @@ std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
         }
     }
     output.push_back(symbol);
-    print_bits(output);
-    std::cout << std::endl;
+    // print_bits(output);
+    // std::cout << std::endl;
     return output;
 }
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::map<std::vector<bool>, std::size_t, KeyComparator> string_table = {
+    // std::map<std::vector<bool>, std::size_t, KeyComparator> string_table = {
+    //     {{0}, 0}, {{1}, 1}
+    // };
+    std::map<std::vector<bool>, std::size_t> string_table = {
         {{0}, 0}, {{1}, 1}
     };
     std::vector<bool> p;
@@ -157,7 +160,9 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
                 *result = bit;
                 ++result;
             }
-            string_table[pc] = string_table.size();
+            // if (string_table.size() < 256) {
+                string_table[pc] = string_table.size();
+            // }
             p = {c};
         }
     }
@@ -187,14 +192,34 @@ void print(Iterable bits) {
     std::cout << std::endl;
 }
 
-int main() {
-    std::vector<bool> input;
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::bernoulli_distribution dist;
-        std::generate_n(std::back_inserter(input), 2048, [&] () { return dist(gen); });
+template <class InputIterator, class OutputIterator>
+OutputIterator bytes_to_bits(InputIterator first, InputIterator last, OutputIterator result) {
+    for (; first != last; ++first) {
+        for (auto bit : serialise_for(*first, 256)) {
+            *result = bit;
+            ++result;
+        }
     }
+    return result;
+}
+
+#include <fstream>
+
+int main(int argc, char* argv[]) {
+    auto file = std::ifstream(argv[1], std::ifstream::binary);
+    std::vector<char> file_data(
+        (std::istreambuf_iterator<char>(file)),
+        (std::istreambuf_iterator<char>())
+    );
+    file.close();
+    std::vector<bool> input;
+    bytes_to_bits(file_data.begin(), file_data.end(), std::back_inserter(input));
+    // {
+    //     std::random_device rd;
+    //     std::mt19937 gen(rd());
+    //     std::bernoulli_distribution dist;
+    //     std::generate_n(std::back_inserter(input), 16777216, [&] () { return dist(gen); });
+    // }
     // print_bits(input);
     // std::cout << std::endl;
     std::vector<uintmax_t> output;
