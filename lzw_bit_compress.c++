@@ -171,10 +171,11 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         ++result;
     }
     // XXX: print decoder table just for info
-    for (auto kp : string_table) {
-        print_bits(kp.first);
-        std::cout << " -> " << kp.second << std::endl;
-    }
+    // for (auto kp : string_table) {
+    //     print_bits(kp.first);
+    //     std::cout << " -> " << kp.second << std::endl;
+    // }
+    std::cout << "Code table size: " << string_table.size() << " entries" << std::endl;
     return result;
 }
 
@@ -207,13 +208,9 @@ OutputIterator bytes_to_bits(InputIterator first, InputIterator last, OutputIter
 
 int main(int argc, char* argv[]) {
     auto file = std::ifstream(argv[1], std::ifstream::binary);
-    std::vector<char> file_data(
-        (std::istreambuf_iterator<char>(file)),
-        (std::istreambuf_iterator<char>())
-    );
-    file.close();
     std::vector<bool> input;
-    bytes_to_bits(file_data.begin(), file_data.end(), std::back_inserter(input));
+    bytes_to_bits(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), std::back_inserter(input));
+    file.close();
     // {
     //     std::random_device rd;
     //     std::mt19937 gen(rd());
