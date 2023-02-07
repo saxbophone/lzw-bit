@@ -120,6 +120,26 @@ void print_bits(Iterable bits) {
     }
 }
 
+#include <cmath>
+
+std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
+    std::size_t bits_needed = std::ceil(std::log2(space_size));
+    std::vector<bool> output;
+    std::cout << symbol << " -> ";
+    for (std::uintmax_t p = 1 << (bits_needed - 1); p > 1; p >>= 1) {
+        if (symbol & p) {
+            output.push_back(1);
+            symbol -= p;
+        } else {
+            output.push_back(0);
+        }
+    }
+    output.push_back(symbol);
+    print_bits(output);
+    std::cout << std::endl;
+    return output;
+}
+
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     std::map<std::vector<bool>, std::size_t, KeyComparator> string_table = {
@@ -133,14 +153,18 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         if (string_table.contains(pc)) {
             p = pc;
         } else {
-            *result = string_table[p];
-            ++result;
+            for (auto bit : serialise_for(string_table[p], string_table.size())) {
+                *result = bit;
+                ++result;
+            }
             string_table[pc] = string_table.size();
             p = {c};
         }
     }
-    *result = string_table[p];
-    ++result;
+    for (auto bit : serialise_for(string_table[p], string_table.size())) {
+        *result = bit;
+        ++result;
+    }
     // XXX: print decoder table just for info
     for (auto kp : string_table) {
         print_bits(kp.first);
@@ -169,11 +193,12 @@ int main() {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::bernoulli_distribution dist;
-        std::generate_n(std::back_inserter(input), 256, [&] () { return dist(gen); });
+        std::generate_n(std::back_inserter(input), 2048, [&] () { return dist(gen); });
     }
-    print_bits(input);
-    std::cout << std::endl;
+    // print_bits(input);
+    // std::cout << std::endl;
     std::vector<uintmax_t> output;
     lzw_bit_compress(input.begin(), input.end(), std::back_inserter(output));
-    print(output);
+    // print_bits(output);
+    std::cout << input.size() << " bits -> " << output.size() << " bits" << std::endl;
 }
