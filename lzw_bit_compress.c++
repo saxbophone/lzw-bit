@@ -29,12 +29,20 @@ std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
     return output;
 }
 
+#include <bitset>
+
+// NB: this function would be much more straightforward if we had a special
+// iterator which could map two and from bit and byte sequences:
+// https://github.com/saxbophone/cpp_utils/issues/2
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
+    std::bitset<8> output_buffer;
+    std::size_t output_index = 0;
     std::map<std::vector<bool>, std::size_t> string_table = {
         {{0}, 0}, {{1}, 1}
     };
     std::vector<bool> p;
+    // std::size_t out_bits = 0;
     for (; first != last; ++first) {
         for (bool c : serialise_for(*first, 256)) {
             std::vector<bool> pc = p;
@@ -43,8 +51,14 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
                 p = pc;
             } else {
                 for (auto bit : serialise_for(string_table[p], string_table.size())) {
-                    *result = bit;
-                    ++result;
+                    output_buffer[output_index++] = bit;
+                    if (output_index == 8) {
+                        // flush byte out
+                        *result = (char)(output_buffer.to_ulong() & 0xFF);
+                        ++result;
+                        output_index = 0;
+                    }
+                    // out_bits++;
                 }
                 // if (string_table.size() < 256) {
                     string_table[pc] = string_table.size();
@@ -54,8 +68,14 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         }
     }
     for (auto bit : serialise_for(string_table[p], string_table.size())) {
-        *result = bit;
-        ++result;
+        output_buffer[output_index++] = bit;
+        if (output_index == 8) {
+            // flush byte out
+            *result = (char)(output_buffer.to_ulong() & 0xFF);
+            ++result;
+            output_index = 0;
+        }
+        // out_bits++;
     }
     // XXX: print decoder table just for info
     // for (auto kp : string_table) {
@@ -63,6 +83,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     //     std::cout << " -> " << kp.second << std::endl;
     // }
     std::cout << "Code table size: " << string_table.size() << " entries" << std::endl;
+    // std::cout << "Output size: " << out_bits / 8 << std::endl;
     return result;
 }
 
@@ -83,11 +104,11 @@ void print(Iterable bits) {
 #include <fstream>
 
 int main(int argc, char* argv[]) {
-    auto file = std::ifstream(argv[1], std::ifstream::binary);
-    std::vector<uintmax_t> output;
-    lzw_bit_compress(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), std::back_inserter(output));
-    std::size_t input_size = file.tellg();
-    std::size_t output_size = std::ceil((double)output.size() / 8);
+    auto input_file = std::ifstream(argv[1], std::ifstream::binary);
+    auto output_file = std::ofstream(argv[2], std::ofstream::binary);
+    lzw_bit_compress(std::istreambuf_iterator<char>(input_file), std::istreambuf_iterator<char>(), std::ostreambuf_iterator<char>(output_file));
+    std::size_t input_size = input_file.tellg();
+    std::size_t output_size = output_file.tellp();
     std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
-    file.close();
+    // files close automatically thanks to RAII
 }
