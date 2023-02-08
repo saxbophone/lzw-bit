@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     auto output_file = std::ofstream(argv[2], std::ofstream::binary);
     auto file_reader = std::istreambuf_iterator<char>(input_file);
     auto file_writer = std::ostreambuf_iterator<char>(output_file);
-    auto bit_writer = lzw_bit_compress(
+    lzw_bit_compress(
         char_bit_input_iterator<std::istreambuf_iterator<char>>(file_reader),
         char_bit_input_iterator<std::istreambuf_iterator<char>>(),
         char_bit_output_iterator<std::ostreambuf_iterator<char>>(file_writer)
@@ -92,5 +92,4 @@ int main(int argc, char* argv[]) {
     std::size_t output_size = output_file.tellp();
     std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
     // files close automatically thanks to RAII, as do unwritten bit-streams
-    std::cin.get();
 }

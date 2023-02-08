@@ -91,6 +91,17 @@ struct char_bit_output_iterator {
         // byte are not lost, but are sent out to the onward char-stream we wrap
         flush();
     }
+    // we define a custom move constructor to ensure that copies don't double-flush the stream when moved from!
+    constexpr char_bit_output_iterator(char_bit_output_iterator&& other)
+      // all resources transfer from other to this:
+      : _wrapped_iterator(other._wrapped_iterator)
+      , _char_offset(other._char_offset)
+      , _current_char(other._current_char)
+      {
+        // we then clear other's 
+        other._char_offset = BITS_PER_CHAR; // XXX: crucial to prevent dtor flushing twice!
+        other._current_char = 0;
+    }
     constexpr char_bit_output_iterator& operator=(bool bit) {
         // write the bit
         _current_char |= (bit << (--_char_offset));
