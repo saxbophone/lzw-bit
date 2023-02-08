@@ -42,29 +42,26 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         {{0}, 0}, {{1}, 1}
     };
     std::vector<bool> p;
-    // std::size_t out_bits = 0;
     for (; first != last; ++first) {
-        for (bool c : serialise_for(*first, 256)) {
-            std::vector<bool> pc = p;
-            pc.push_back(c);
-            if (string_table.contains(pc)) {
-                p = pc;
-            } else {
-                for (auto bit : serialise_for(string_table[p], string_table.size())) {
-                    output_buffer[output_index++] = bit;
-                    if (output_index == 8) {
-                        // flush byte out
-                        *result = (char)(output_buffer.to_ulong() & 0xFF);
-                        ++result;
-                        output_index = 0;
-                    }
-                    // out_bits++;
+        bool c = *first;
+        std::vector<bool> pc = p;
+        pc.push_back(c);
+        if (string_table.contains(pc)) {
+            p = pc;
+        } else {
+            for (auto bit : serialise_for(string_table[p], string_table.size())) {
+                output_buffer[output_index++] = bit;
+                if (output_index == 8) {
+                    // flush byte out
+                    *result = (char)(output_buffer.to_ulong() & 0xFF);
+                    ++result;
+                    output_index = 0;
                 }
-                // if (string_table.size() < 256) {
-                    string_table[pc] = string_table.size();
-                // }
-                p = {c};
             }
+            // if (string_table.size() < 256) {
+                string_table[pc] = string_table.size();
+            // }
+            p = {c};
         }
     }
     for (auto bit : serialise_for(string_table[p], string_table.size())) {
@@ -75,7 +72,6 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             ++result;
             output_index = 0;
         }
-        // out_bits++;
     }
     // XXX: print decoder table just for info
     // for (auto kp : string_table) {
@@ -103,10 +99,17 @@ void print(Iterable bits) {
 
 #include <fstream>
 
+#include "bit_iterator.hpp"
+
 int main(int argc, char* argv[]) {
     auto input_file = std::ifstream(argv[1], std::ifstream::binary);
     auto output_file = std::ofstream(argv[2], std::ofstream::binary);
-    lzw_bit_compress(std::istreambuf_iterator<char>(input_file), std::istreambuf_iterator<char>(), std::ostreambuf_iterator<char>(output_file));
+    auto file_reader = std::istreambuf_iterator<char>(input_file);
+    lzw_bit_compress(
+        char_bit_input_iterator<std::istreambuf_iterator<char>>(file_reader),
+        char_bit_input_iterator<std::istreambuf_iterator<char>>(),
+        std::ostreambuf_iterator<char>(output_file)
+    );
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
     std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
