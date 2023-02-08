@@ -21,7 +21,7 @@ struct char_bit_input_iterator {
      */
     using reference = bool;
     // NB: used for a different purpose than std::istreambuf_iterator::char_type
-    using char_type = std::make_unsigned<typename CharInputIterator::value_type>::type;
+    using char_type = std::make_unsigned<typename CharInputIterator::char_type>::type;
 
     // psuedo-default ctor instantiates the end-of-stream iterator
     constexpr char_bit_input_iterator() : _wrapped_iterator(_end_of_stream) {}
@@ -43,8 +43,7 @@ public:
     // we don't provide an object-access pointer because istreambuf_iterator no
     // longer does and it makes no sense to provide a pointer to a bit temporary
     constexpr char_bit_input_iterator& operator++() {
-        _char_offset--;
-        if (_char_offset == 0) {
+        if (--_char_offset == 0) {
             ++_wrapped_iterator;
             _char_offset = BITS_PER_CHAR;
             _current_char = *_wrapped_iterator;
@@ -74,9 +73,62 @@ private:
     char_type _current_char;
 };
 
+template <typename CharOutputIterator>
 struct char_bit_output_iterator {
-    // TODO: implement output iterator for converting bits->chars
+    // output iterator for converting bits->chars
     // analogous to std::ostreambuf_iterator
+    using iterator_category = std::output_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = void;
+    using pointer = void;
+    using reference = void;
+    // NB: used for a different purpose than std::istreambuf_iterator::char_type
+    using char_type = std::make_unsigned<typename CharOutputIterator::char_type>::type;
+
+    constexpr char_bit_output_iterator(CharOutputIterator& chout) : _wrapped_iterator(chout) {}
+    constexpr ~char_bit_output_iterator() {
+        // use RAII-like mechanisms to ensure any lingering bits of an incomplete
+        // byte are not lost, but are sent out to the onward char-stream we wrap
+        flush();
+    }
+    constexpr char_bit_output_iterator& operator=(bool bit) {
+        // write the bit
+        _current_char |= (bit << (_char_offset - 1));
+        // adjust internal index
+        if(--_char_offset == 0) {
+            // flush if needed
+            flush();
+        }
+        return *this;
+    }
+    // just like std::ostreambuf_iterator, provided only to satisfty LegacyOutputIterator requirements
+    constexpr char_bit_output_iterator& operator*() {
+        return *this;
+    }
+    // and the same with both prefix and postfix operator++ overloads:
+    constexpr char_bit_output_iterator& operator++() {
+        return *this;
+    }
+    constexpr char_bit_output_iterator& operator++(int) {
+        return *this;
+    }
+    // used to ensure output is flushed, even if not enough bits for a whole char are written
+    // the missing bits are sent as 0s
+    constexpr void flush() {
+        *_wrapped_iterator = _current_char;
+        // reset internal index
+        _char_offset = BITS_PER_CHAR;
+        // reset char temporary
+        _current_char = 0;
+    }
+
+private:
+    CharOutputIterator& _wrapped_iterator;
+    // we iterate bits big-endian by default
+    // TODO: allow this to be modified optionally
+    static constexpr std::size_t BITS_PER_CHAR = (std::size_t)std::numeric_limits<char_type>::digits;
+    std::size_t _char_offset = BITS_PER_CHAR;
+    char_type _current_char;
 };
 
 // int main(int, char* argv[]) {

@@ -36,8 +36,6 @@ std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
 // https://github.com/saxbophone/cpp_utils/issues/2
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::bitset<8> output_buffer;
-    std::size_t output_index = 0;
     std::map<std::vector<bool>, std::size_t> string_table = {
         {{0}, 0}, {{1}, 1}
     };
@@ -50,13 +48,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             p = pc;
         } else {
             for (auto bit : serialise_for(string_table[p], string_table.size())) {
-                output_buffer[output_index++] = bit;
-                if (output_index == 8) {
-                    // flush byte out
-                    *result = (char)(output_buffer.to_ulong() & 0xFF);
-                    ++result;
-                    output_index = 0;
-                }
+                *result = bit;
             }
             // if (string_table.size() < 256) {
                 string_table[pc] = string_table.size();
@@ -67,13 +59,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         }
     }
     for (auto bit : serialise_for(string_table[p], string_table.size())) {
-        output_buffer[output_index++] = bit;
-        if (output_index == 8) {
-            // flush byte out
-            *result = (char)(output_buffer.to_ulong() & 0xFF);
-            ++result;
-            output_index = 0;
-        }
+        *result = bit;
     }
     // XXX: print decoder table just for info
     for (auto kp : string_table) {
@@ -109,10 +95,11 @@ int main(int argc, char* argv[]) {
     auto input_file = std::ifstream(argv[1], std::ifstream::binary);
     auto output_file = std::ofstream(argv[2], std::ofstream::binary);
     auto file_reader = std::istreambuf_iterator<char>(input_file);
+    auto file_writer = std::ostreambuf_iterator<char>(output_file);
     lzw_bit_compress(
         char_bit_input_iterator<std::istreambuf_iterator<char>>(file_reader),
         char_bit_input_iterator<std::istreambuf_iterator<char>>(),
-        std::ostreambuf_iterator<char>(output_file)
+        char_bit_output_iterator<std::ostreambuf_iterator<char>>(file_writer)
     );
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
