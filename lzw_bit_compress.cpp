@@ -31,9 +31,6 @@ std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
 
 #include <bitset>
 
-// NB: this function would be much more straightforward if we had a special
-// iterator which could map two and from bit and byte sequences:
-// https://github.com/saxbophone/cpp_utils/issues/2
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     std::map<std::vector<bool>, std::size_t> string_table = {

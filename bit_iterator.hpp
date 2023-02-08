@@ -93,10 +93,9 @@ struct char_bit_output_iterator {
     }
     constexpr char_bit_output_iterator& operator=(bool bit) {
         // write the bit
-        _current_char |= (bit << (_char_offset - 1));
-        // adjust internal index
-        if(--_char_offset == 0) {
-            // flush if needed
+        _current_char |= (bit << (--_char_offset));
+        // flush if a full char is ready to be written
+        if(_char_offset == 0) {
             flush();
         }
         return *this;
@@ -115,7 +114,10 @@ struct char_bit_output_iterator {
     // used to ensure output is flushed, even if not enough bits for a whole char are written
     // the missing bits are sent as 0s
     constexpr void flush() {
-        *_wrapped_iterator = _current_char;
+        // only flush if there is any pending data to send
+        if (_char_offset != BITS_PER_CHAR) {
+            *_wrapped_iterator = _current_char;
+        }
         // reset internal index
         _char_offset = BITS_PER_CHAR;
         // reset char temporary
@@ -128,7 +130,7 @@ private:
     // TODO: allow this to be modified optionally
     static constexpr std::size_t BITS_PER_CHAR = (std::size_t)std::numeric_limits<char_type>::digits;
     std::size_t _char_offset = BITS_PER_CHAR;
-    char_type _current_char;
+    char_type _current_char = 0;
 };
 
 // int main(int, char* argv[]) {
