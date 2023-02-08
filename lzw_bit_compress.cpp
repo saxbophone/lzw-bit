@@ -60,6 +60,8 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             }
             // if (string_table.size() < 256) {
                 string_table[pc] = string_table.size();
+                // print_bits(pc);
+                // std::cout << " -> " << string_table[pc] << std::endl;
             // }
             p = {c};
         }
@@ -74,10 +76,12 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         }
     }
     // XXX: print decoder table just for info
-    // for (auto kp : string_table) {
-    //     print_bits(kp.first);
-    //     std::cout << " -> " << kp.second << std::endl;
-    // }
+    for (auto kp : string_table) {
+        print_bits(kp.first);
+        std::cout << " -> ";
+        print_bits(serialise_for(kp.second, string_table.size()));
+        std::cout << std::endl;
+    }
     std::cout << "Code table size: " << string_table.size() << " entries" << std::endl;
     // std::cout << "Output size: " << out_bits / 8 << std::endl;
     return result;
