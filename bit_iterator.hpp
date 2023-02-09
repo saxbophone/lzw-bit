@@ -144,12 +144,19 @@ struct char_bit_output_iterator {
     constexpr void flush() {
         // only flush if there is any pending data to send
         if (_char_offset != BITS_PER_CHAR) {
-            *_wrapped_iterator = _current_char;
+            // _wrapped_iterator might be null if this object was moved from
+            // although attempting to write bits out to a moved-from iterator
+            // is poor practice, such code is not undefined behaviour so we need
+            // to account for it to at least prevent null-deref, so we account
+            // for it by making flush() on a moved-from iterator a no-op.
+            if (_wrapped_iterator != nullptr) {
+                *_wrapped_iterator = _current_char;
+            }
+            // reset internal index
+            _char_offset = BITS_PER_CHAR;
+            // reset char temporary
+            _current_char = 0;
         }
-        // reset internal index
-        _char_offset = BITS_PER_CHAR;
-        // reset char temporary
-        _current_char = 0;
     }
 
 private:
