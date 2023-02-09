@@ -43,6 +43,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         } else {
             for (auto bit : serialise_for(string_table[p], string_table.size())) {
                 *result = bit;
+                ++result;
             }
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
@@ -56,6 +57,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // write out last remaining symbol left on output
     for (auto bit : serialise_for(string_table[p], string_table.size())) {
         *result = bit;
+        ++result;
     }
     return result;
 }
@@ -78,18 +80,18 @@ void print(Iterable bits) {
 
 #include "bit_iterator.hpp"
 
-int main(int argc, char* argv[]) {
+int main(int, char* argv[]) {
     auto input_file = std::ifstream(argv[1], std::ifstream::binary);
     auto output_file = std::ofstream(argv[2], std::ofstream::binary);
     auto file_reader = std::istreambuf_iterator<char>(input_file);
     auto file_writer = std::ostreambuf_iterator<char>(output_file);
     lzw_bit_compress(
-        char_bit_input_iterator<std::istreambuf_iterator<char>>(file_reader),
-        char_bit_input_iterator<std::istreambuf_iterator<char>>(),
-        char_bit_output_iterator<std::ostreambuf_iterator<char>>(file_writer)
-    );
+        char_bit_input_iterator<std::istreambuf_iterator, char>(file_reader),
+        char_bit_input_iterator<std::istreambuf_iterator, char>(),
+        char_bit_output_iterator<std::ostreambuf_iterator, char>(file_writer)
+    ); // any unwritten partial-byte bitstreams get written here as the output iterator goes out of scope
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
     std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
-    // files close automatically thanks to RAII, as do unwritten bit-streams
+    // files close automatically thanks to RAII
 }

@@ -6,7 +6,7 @@
 
 #include <cstddef>
 
-template <typename CharInputIterator>
+template <template<class> class CharInputIterator, class CharT>
 struct char_bit_input_iterator {
     using iterator_category = std::input_iterator_tag;
     using difference_type = std::ptrdiff_t;
@@ -21,12 +21,13 @@ struct char_bit_input_iterator {
      */
     using reference = bool;
     // NB: used for a different purpose than std::istreambuf_iterator::char_type
-    using char_type = std::make_unsigned<typename CharInputIterator::char_type>::type;
+    using char_type = std::make_unsigned<CharT>::type;
+    using wrapped_type = CharInputIterator<CharT>;
 
     // psuedo-default ctor instantiates the end-of-stream iterator
     constexpr char_bit_input_iterator() : _wrapped_iterator(_end_of_stream) {}
     // main ctor that actually takes a char stream iterator to wrap
-    constexpr char_bit_input_iterator(CharInputIterator& chit) : _wrapped_iterator(chit), _current_char(*_wrapped_iterator) {}
+    constexpr char_bit_input_iterator(wrapped_type& chit) : _wrapped_iterator(chit), _current_char(*_wrapped_iterator) {}
 private:
     // this is a bit of a fudge, but these "orphan" iterator nodes allow us to
     // follow the API that std::istreambuf_iterator uses for when a dangling
@@ -64,8 +65,8 @@ private:
     // orphan stuff only used for dangling iterators left behind after postfix increment
     bool _is_orphan = false;
     bool _orphan;
-    CharInputIterator _end_of_stream;
-    CharInputIterator& _wrapped_iterator;
+    wrapped_type _end_of_stream;
+    wrapped_type& _wrapped_iterator;
     // we iterate bits big-endian by default
     // TODO: allow this to be modified optionally
     static constexpr std::size_t BITS_PER_CHAR = (std::size_t)std::numeric_limits<char_type>::digits;
@@ -73,34 +74,50 @@ private:
     char_type _current_char;
 };
 
-template <typename CharOutputIterator>
+template <template<class> class CharOutputIterator, class CharT>
 struct char_bit_output_iterator {
     // output iterator for converting bits->chars
     // analogous to std::ostreambuf_iterator
-    using iterator_category = std::output_iterator_tag;
+    using iterator_category = std::output_iterator_tag; // a bit of a lie, this iterator is not copyable!
     using difference_type = std::ptrdiff_t;
     using value_type = void;
     using pointer = void;
     using reference = void;
     // NB: used for a different purpose than std::istreambuf_iterator::char_type
-    using char_type = std::make_unsigned<typename CharOutputIterator::char_type>::type;
+    using char_type = std::make_unsigned<CharT>::type;
+    using wrapped_type = CharOutputIterator<CharT>;
 
-    constexpr char_bit_output_iterator(CharOutputIterator& chout) : _wrapped_iterator(chout) {}
+    constexpr char_bit_output_iterator(wrapped_type& chout) : _wrapped_iterator(&chout) {}
     constexpr ~char_bit_output_iterator() {
         // use RAII-like mechanisms to ensure any lingering bits of an incomplete
         // byte are not lost, but are sent out to the onward char-stream we wrap
         flush();
     }
+    // while technically not needed as we've defined custom move constructors,
+    // which cause the implicitly-defined copy constructor to be deleted, we want
+    // to make it absolutely clear that this iterator type is non-copyable
+    constexpr char_bit_output_iterator(const char_bit_output_iterator&) = delete;
+    // exactly the same for copy-assignment
+    constexpr char_bit_output_iterator& operator=(const char_bit_output_iterator&) = delete;
     // we define a custom move constructor to ensure that copies don't double-flush the stream when moved from!
-    constexpr char_bit_output_iterator(char_bit_output_iterator&& other)
-      // all resources transfer from other to this:
-      : _wrapped_iterator(other._wrapped_iterator)
-      , _char_offset(other._char_offset)
-      , _current_char(other._current_char)
-      {
-        // we then clear other's 
-        other._char_offset = BITS_PER_CHAR; // XXX: crucial to prevent dtor flushing twice!
-        other._current_char = 0;
+    constexpr char_bit_output_iterator(char_bit_output_iterator&& other) {
+        *this = std::move(other);
+    }
+    // custom move-assignment operator
+    // this allows you to at least do x = std::move(y), as this iterator is not copyable!
+    constexpr char_bit_output_iterator& operator=(char_bit_output_iterator&& other) {
+        if (this != &other) {
+            // nothing to free, _wrapped_iterator is a non-owning pointer
+            // all resources transfer from other to this:
+            _wrapped_iterator = other._wrapped_iterator;
+            _char_offset = other._char_offset;
+            _current_char = other._current_char;
+            // we then clear other's --crucial to prevent dtor flushing twice!
+            other._wrapped_iterator = nullptr;
+            other._char_offset = BITS_PER_CHAR;
+            other._current_char = 0;
+        }
+        return *this;
     }
     constexpr char_bit_output_iterator& operator=(bool bit) {
         // write the bit
@@ -136,7 +153,7 @@ struct char_bit_output_iterator {
     }
 
 private:
-    CharOutputIterator& _wrapped_iterator;
+    wrapped_type* _wrapped_iterator = nullptr;
     // we iterate bits big-endian by default
     // TODO: allow this to be modified optionally
     static constexpr std::size_t BITS_PER_CHAR = (std::size_t)std::numeric_limits<char_type>::digits;
