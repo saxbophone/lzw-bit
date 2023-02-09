@@ -89,6 +89,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     ++first;
     *result = c;
     ++result;
+    std::cout << c << " -> " << c << std::endl;
     std::vector<bool> p = {c};
     while (first != last) {
         // need to know how many bits currently needed to store codes in dictionary
