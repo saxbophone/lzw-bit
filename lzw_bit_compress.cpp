@@ -106,12 +106,12 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         }
         // now we have a codeword as a sequence of bits, convert to codeword and look up
         std::uintmax_t codeword = deserialise(codeword_bits);
+        print_bits(codeword_bits);
+        std::cout << " -> ";
         if (string_table.contains(codeword)) {
             // if codeword was found in the dictionary
             auto entry = string_table[codeword];
             // output it
-            print_bits(codeword_bits);
-            std::cout << " -> ";
             print_bits(entry);
             std::cout << std::endl;
             for (auto bit : entry) {
@@ -124,6 +124,8 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             p = entry;
         } else {
             p.push_back(p[0]);
+            print_bits(p);
+            std::cout << std::endl;
             for (auto bit : p) {
                 *result = bit;
                 ++result;
