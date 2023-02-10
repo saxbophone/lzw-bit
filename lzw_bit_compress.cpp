@@ -161,6 +161,18 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
             string_table += pc;
+            // XXX: Optimisation, remove any "shadowed" redundant codes from table
+            auto shadow_code = p;
+            shadow_code.push_back(!c);
+            if (string_table.contains(shadow_code)) {
+                print_bits(p);
+                std::cout << " shadowed by ";
+                print_bits(pc);
+                std::cout << " and ";
+                print_bits(shadow_code);
+                std::cout << " --removing" << std::endl;
+                string_table -= p;
+            }
             // }
             p = {c};
         }
