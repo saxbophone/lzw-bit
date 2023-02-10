@@ -35,11 +35,111 @@ uintmax_t deserialise(std::vector<bool> bits) {
     return result;
 }
 
+#include <algorithm>
+#include <memory>
+#include <optional>
+
+class CodeTable {
+public:
+    // special tag-like type, used only to request the "END" symbol
+    struct End {} static constexpr END = {};
+    // not the most efficient structure for searching, but it'll do for now
+    // whilst we get the logic sorted out
+    struct string_entry {
+        std::vector<bool> string;
+        std::optional<std::size_t> codeword;
+    };
+    // default constructor, auto-initialises a code table with all 1-bit strings
+    // and a special "EOF" symbol
+    CodeTable() : _entries{{{0}, 0}, {{1}, 1}} {}
+    // use codetable += <bit string> to add a code to the table
+    CodeTable& operator+=(const std::vector<bool>& string) {
+        // XXX: not checking if code already is present, BE CAREFUL!
+        string_entry entry = {string, size()};
+        _entries.push_back(entry);
+        return *this;
+    }
+    // find by string and return an iterator, which might be .end()
+    std::vector<string_entry>::iterator find(const std::vector<bool>& string) {
+        auto first = _entries.begin();
+        for ( ; first != _entries.end(); ++first) {
+            if (first->string == string) { break; }
+        }
+        return first;
+    }
+    // find by codeword and return an iterator, which might be .end()
+    std::vector<string_entry>::iterator find(std::size_t codeword) {
+        auto first = _entries.begin();
+        for ( ; first != _entries.end(); ++first) {
+            if (first->codeword == codeword) { break; }
+        }
+        return first;
+    }
+    // remove the code for the given string from the table
+    // NOTE: the string remains present in the table but is now uncoded
+    CodeTable& operator-=(const std::vector<bool>& string) {
+        auto entry = find(string);
+        if (entry != _entries.end()) {
+            // uncode the entry
+            entry->codeword = std::nullopt;
+            // now advance through the rest of the entries after and reduce the codeword value for any that are uncoded
+            for ( ; entry != _entries.end(); ++entry) {
+                if (entry->codeword) { entry->codeword = entry->codeword.value() + 1; }
+            }
+        }
+        return *this;
+    }
+    // check to see if a string is in the table
+    bool contains(const std::vector<bool>& string) {
+        return find(string) != _entries.end();
+    }
+    // check to see if a code is in the table
+    bool contains(std::size_t codeword) {
+        return find(codeword) != _entries.end();
+    }
+    // retrieve the codeword for the given bit string, or std::nullopt if the codeword is uncoded
+    // (NOTE if it's not present at all, which is different to "uncoded", an error is raised)
+    // NOTE: using optional here is just for debugging, it should never return nullopt if our theory is correct
+    // TODO: remove it later and error if it can't be found
+    std::optional<std::size_t> operator[](const std::vector<bool>& string) {
+        return find(string)->codeword;
+    }
+    // retreive the codeword used for the special "End of Data" symbol
+    std::size_t operator[](const End&) {
+        return size() - 1;
+    }
+    // retrieve the bit-string encoded by the given codeword
+    std::vector<bool> operator[](std::size_t codeword) {
+        return find(codeword)->string;
+    }
+    // give codes back to any uncoded (dropped) strings from the table
+    // NOTE: strings are not guaranteed to get back their original codewords
+    void restore_dropped_codes() {
+        // simplest thing to do is just re-fill the codewords with successive values
+        for (std::size_t i = 0; i < _entries.size(); i++) {
+            _entries[i].codeword = i;
+        }
+    }
+    // returns the number of *coded* strings in the table. This can be less than
+    // the total number of strings stored in the table, if for example any have
+    // been uncoded.
+    // Knowing the number of assigned codes is essential for serialising and
+    // deserialising codewords in a space-efficient way.
+    std::size_t size() const {
+        // count only the non-uncoded entries and then add 1 (for the implicit "END" symbol)
+        return std::count_if(
+            _entries.begin(),
+            _entries.end(),
+            [](auto entry) { return entry.codeword.has_value(); }
+        ) + 1;
+    }
+private:
+    std::vector<string_entry> _entries;
+};
+
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::unordered_map<std::vector<bool>, std::size_t> string_table = {
-        {{0}, 0}, {{1}, 1}
-    };
+    CodeTable string_table;
     std::vector<bool> p;
     for (; first != last; ++first) {
         bool c = *first;
@@ -50,7 +150,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         } else {
             // print_bits(p);
             // std::cout << " -> ";
-            for (auto bit : serialise_for(string_table[p], string_table.size())) {
+            for (auto bit : serialise_for(*string_table[p], string_table.size())) {
                 // std::cout << bit;
                 *result = bit;
                 ++result;
@@ -60,7 +160,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // FIME: Currently, there is no restriction, which can eat up all the
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
-            string_table[pc] = string_table.size();
+            string_table += pc;
             // }
             p = {c};
         }
@@ -68,7 +168,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // print_bits(p);
     // std::cout << " -> ";
     // write out last remaining symbol left on output
-    for (auto bit : serialise_for(string_table[p], string_table.size())) {
+    for (auto bit : serialise_for(*string_table[p], string_table.size())) {
         // std::cout << bit;
         *result = bit;
         ++result;
@@ -79,7 +179,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::vector<std::vector<bool>> string_table = {{0}, {1}};
+    CodeTable string_table;
     // first bit is always encoded verbatim
     bool c = *first;
     ++first;
@@ -104,7 +204,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         std::uintmax_t codeword = deserialise(codeword_bits);
         // print_bits(codeword_bits);
         // std::cout << " -> ";
-        if (codeword < string_table.size()) {
+        if (string_table.contains(codeword)) {
             // if codeword was found in the dictionary
             auto entry = string_table[codeword];
             // output it
@@ -116,7 +216,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             }
             // add p + entry[0] to dictionary
             p.push_back(entry[0]);
-            string_table.push_back(p);
+            string_table += p;
             p = entry;
         } else {
             p.push_back(p[0]);
@@ -126,7 +226,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
                 *result = bit;
                 ++result;
             }
-            string_table.push_back(p);
+            string_table += p;
         }
     }
     return result;
@@ -134,7 +234,6 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <algorithm>
 #include <random>
 
 
@@ -169,7 +268,7 @@ int main(int, char* argv[]) {
             char_bit_output_iterator<std::ostreambuf_iterator, char>(file_writer)
         ); // any unwritten partial-byte bitstreams get written here as the output iterator goes out of scope
     } else {
-        std::cerr << "Usage: ./program [c|d] <input file> <output file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [c|d] <input file> <output file>" << std::endl;
     }
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
