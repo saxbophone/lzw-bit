@@ -12,6 +12,7 @@ void print_bits(Iterable bits) {
 #include <cmath>
 
 std::vector<bool> serialise_for(uintmax_t symbol, std::size_t space_size) {
+    // std::cout << "serialise_for(" << symbol << ", " << space_size << ")" << std::endl;
     std::size_t bits_needed = std::ceil(std::log2(space_size));
     std::vector<bool> output;
     for (std::uintmax_t p = 1 << (bits_needed - 1); p > 1; p >>= 1) {
@@ -41,8 +42,6 @@ uintmax_t deserialise(std::vector<bool> bits) {
 
 class CodeTable {
 public:
-    // special tag-like type, used only to request the "END" symbol
-    struct End {} static constexpr END = {};
     // not the most efficient structure for searching, but it'll do for now
     // whilst we get the logic sorted out
     struct string_entry {
@@ -105,7 +104,7 @@ public:
         return find(string)->codeword;
     }
     // retreive the codeword used for the special "End of Data" symbol
-    std::size_t operator[](const End&) {
+    std::size_t end_code() const {
         return size() - 1;
     }
     // retrieve the bit-string encoded by the given codeword
@@ -165,12 +164,12 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             auto shadow_code = p;
             shadow_code.push_back(!c);
             if (string_table.contains(shadow_code)) {
-                print_bits(p);
-                std::cout << " shadowed by ";
-                print_bits(pc);
-                std::cout << " and ";
-                print_bits(shadow_code);
-                std::cout << " --removing" << std::endl;
+                // print_bits(p);
+                // std::cout << " shadowed by ";
+                // print_bits(pc);
+                // std::cout << " and ";
+                // print_bits(shadow_code);
+                // std::cout << " --removing" << std::endl;
                 string_table -= p;
             }
             // }
@@ -179,7 +178,18 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     }
     // print_bits(p);
     // std::cout << " -> ";
+    // send out the "END" code
+    for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
+        // std::cout << bit;
+        *result = bit;
+        ++result;
+    }
+    // std::cout << std::endl;
+    // restore all previously-dropped symbol codes
+    string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
+    // print_bits(p);
+    // std::cout << " ";
     for (auto bit : serialise_for(*string_table[p], string_table.size())) {
         // std::cout << bit;
         *result = bit;
