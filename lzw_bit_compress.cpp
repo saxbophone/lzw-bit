@@ -1,5 +1,5 @@
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <vector>
 
 template <class Iterable>
@@ -35,11 +35,37 @@ uintmax_t deserialise(std::vector<bool> bits) {
     return result;
 }
 
+#include "saxby_encoder.hpp"
 #include <bitset>
+
+struct bit_vector_key {
+    bit_vector_key() {}
+    bit_vector_key(std::initializer_list<bool> il) : bit_vector_key(std::vector<bool>{il}) {}
+    bit_vector_key(std::vector<bool> bits) : _bits(bits), _hash(ENCODER.encode(_bits)) {}
+    operator std::vector<bool>() const {
+        return _bits;
+    }
+    bool operator==(const bit_vector_key& other) const {
+        return _bits == other._bits;
+    }
+    friend std::hash<bit_vector_key>;
+private:
+    static constexpr Encoder ENCODER{2, 1};
+    std::vector<bool> _bits = {};
+    std::size_t _hash = 0;
+};
+
+template<>
+class std::hash<bit_vector_key> {
+public:
+    std::size_t operator()(const bit_vector_key& bvk) const {
+        return bvk._hash;
+    }
+};
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::map<std::vector<bool>, std::size_t> string_table = {
+    std::unordered_map<bit_vector_key, std::size_t> string_table = {
         {{0}, 0}, {{1}, 1}
     };
     std::vector<bool> p;
@@ -81,7 +107,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::map<std::uintmax_t, std::vector<bool>> string_table = {
+    std::unordered_map<std::uintmax_t, std::vector<bool>> string_table = {
         {0, {0}}, {1, {1}}
     };
     // first bit is always encoded verbatim
