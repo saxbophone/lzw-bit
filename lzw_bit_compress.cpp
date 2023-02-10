@@ -35,37 +35,9 @@ uintmax_t deserialise(std::vector<bool> bits) {
     return result;
 }
 
-#include "saxby_encoder.hpp"
-#include <bitset>
-
-struct bit_vector_key {
-    bit_vector_key() {}
-    bit_vector_key(std::initializer_list<bool> il) : bit_vector_key(std::vector<bool>{il}) {}
-    bit_vector_key(std::vector<bool> bits) : _bits(bits), _hash(ENCODER.encode(_bits)) {}
-    operator std::vector<bool>() const {
-        return _bits;
-    }
-    bool operator==(const bit_vector_key& other) const {
-        return _bits == other._bits;
-    }
-    friend std::hash<bit_vector_key>;
-private:
-    static constexpr Encoder ENCODER{2, 1};
-    std::vector<bool> _bits = {};
-    std::size_t _hash = 0;
-};
-
-template<>
-class std::hash<bit_vector_key> {
-public:
-    std::size_t operator()(const bit_vector_key& bvk) const {
-        return bvk._hash;
-    }
-};
-
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::unordered_map<bit_vector_key, std::size_t> string_table = {
+    std::unordered_map<std::vector<bool>, std::size_t> string_table = {
         {{0}, 0}, {{1}, 1}
     };
     std::vector<bool> p;
@@ -107,9 +79,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
-    std::unordered_map<std::uintmax_t, std::vector<bool>> string_table = {
-        {0, {0}}, {1, {1}}
-    };
+    std::vector<std::vector<bool>> string_table = {{0}, {1}};
     // first bit is always encoded verbatim
     bool c = *first;
     ++first;
@@ -134,7 +104,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         std::uintmax_t codeword = deserialise(codeword_bits);
         // print_bits(codeword_bits);
         // std::cout << " -> ";
-        if (string_table.contains(codeword)) {
+        if (codeword < string_table.size()) {
             // if codeword was found in the dictionary
             auto entry = string_table[codeword];
             // output it
@@ -146,7 +116,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             }
             // add p + entry[0] to dictionary
             p.push_back(entry[0]);
-            string_table[string_table.size()] = p;
+            string_table.push_back(p);
             p = entry;
         } else {
             p.push_back(p[0]);
@@ -156,7 +126,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
                 *result = bit;
                 ++result;
             }
-            string_table[string_table.size()] = p;
+            string_table.push_back(p);
         }
     }
     return result;
