@@ -202,6 +202,10 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
+    // XXX: this is the first mistake. First bit is not always encoded verbatim any more, because of END symbol.
+    // FIXME: read the first symbol in like any other, translating it.
+    // I think the whole decompressor should be rewritten to follow the steps here:
+    // https://www.geeksforgeeks.org/lzw-lempel-ziv-welch-compression-technique/
     // first bit is always encoded verbatim
     bool c = *first;
     ++first;
