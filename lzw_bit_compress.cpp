@@ -147,31 +147,31 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         if (string_table.contains(pc)) {
             p = pc;
         } else {
-            // print_bits(p);
-            // std::cout << " -> ";
+            print_bits(p);
+            std::cout << " -> ";
             for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-                // std::cout << bit;
+                std::cout << bit;
                 *result = bit;
                 ++result;
             }
-            // std::cout << std::endl;
+            std::cout << " (" << string_table.size() << ")" << std::endl;
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
             string_table += pc;
             // XXX: Optimisation, remove any "shadowed" redundant codes from table
-            auto shadow_code = p;
-            shadow_code.push_back(!c);
-            if (string_table.contains(shadow_code)) {
-                // print_bits(p);
-                // std::cout << " shadowed by ";
-                // print_bits(pc);
-                // std::cout << " and ";
-                // print_bits(shadow_code);
-                // std::cout << " --removing" << std::endl;
-                string_table -= p;
-            }
+            // auto shadow_code = p;
+            // shadow_code.push_back(!c);
+            // if (string_table.contains(shadow_code)) {
+            //     // print_bits(p);
+            //     // std::cout << " shadowed by ";
+            //     // print_bits(pc);
+            //     // std::cout << " and ";
+            //     // print_bits(shadow_code);
+            //     // std::cout << " --removing" << std::endl;
+            //     string_table -= p;
+            // }
             // }
             p = {c};
         }
@@ -179,81 +179,83 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // print_bits(p);
     // std::cout << " -> ";
     // send out the "END" code
-    for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
-        // std::cout << bit;
-        *result = bit;
-        ++result;
-    }
+    // for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
+    //     // std::cout << bit;
+    //     *result = bit;
+    //     ++result;
+    // }
     // std::cout << std::endl;
     // restore all previously-dropped symbol codes
-    string_table.restore_dropped_codes();
+    // string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
-    // print_bits(p);
-    // std::cout << " ";
+    print_bits(p);
+    std::cout << " -> ";
     for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-        // std::cout << bit;
+        std::cout << bit;
         *result = bit;
         ++result;
     }
-    // std::cout << std::endl;
+    std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
+}
+
+// helper function for lzw_bit_decompress()
+// reads one symbol from the input stream
+// this is useful because symbols are variable-width --it depends on current table size
+template <class InputIterator>
+std::vector<bool> read_next_symbol(InputIterator& first, InputIterator& last, std::size_t code_table_size) {
+    // need to know how many bits currently needed to store codes in dictionary
+    std::size_t bits_needed = std::ceil(std::log2(code_table_size));
+    std::vector<bool> codeword_bits(bits_needed);
+    // attempt to read this many bits into vector, bailing if we exhaust the source
+    for (std::size_t i = 0; i < codeword_bits.size(); i++) {
+        if (first == last) {
+            // TODO: verify if this is how we want to handle running out of bits
+            break;
+        }
+        codeword_bits[i] = *first;
+        ++first;
+    }
+    // now we have a codeword as a sequence of bits, convert to codeword and look up
+    return codeword_bits;
+}
+
+template <class OutputIterator>
+void output_string(std::vector<bool> string, OutputIterator& result) {
+    for (auto bit : string) {
+        std::cout << bit;
+        *result = bit;
+        ++result;
+    }
 }
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
-    // XXX: this is the first mistake. First bit is not always encoded verbatim any more, because of END symbol.
-    // FIXME: read the first symbol in like any other, translating it.
-    // I think the whole decompressor should be rewritten to follow the steps here:
-    // https://www.geeksforgeeks.org/lzw-lempel-ziv-welch-compression-technique/
-    // first bit is always encoded verbatim
-    bool c = *first;
-    ++first;
-    *result = c;
-    ++result;
-    // std::cout << c << " -> " << c << std::endl;
-    std::vector<bool> p = {c};
+    auto old = read_next_symbol(first, last, string_table.size() + 1);
+    print_bits(old);
+    std::cout << " -> ";
+    output_string(string_table[deserialise(old)], result);
+    std::cout << " (" << string_table.size() << ")" << std::endl;
+    std::vector<bool> s;
+    bool c; // should never be accessed unset anyway
     while (first != last) {
-        // need to know how many bits currently needed to store codes in dictionary
-        std::size_t bits_needed = std::ceil(std::log2(string_table.size() + 1));
-        std::vector<bool> codeword_bits(bits_needed);
-        // attempt to read this many bits into vector, bailing if we exhaust the source
-        for (std::size_t i = 0; i < codeword_bits.size(); i++) {
-            if (first == last) {
-                // this wasn't a codeword, this was trailing padding data at eof
-                return result; // TODO: do we need to emit anything else here?
-            }
-            codeword_bits[i] = *first;
-            ++first;
-        }
-        // now we have a codeword as a sequence of bits, convert to codeword and look up
-        std::uintmax_t codeword = deserialise(codeword_bits);
-        // print_bits(codeword_bits);
-        // std::cout << " -> ";
-        if (string_table.contains(codeword)) {
-            // if codeword was found in the dictionary
-            auto entry = string_table[codeword];
-            // output it
-            // print_bits(entry);
-            // std::cout << std::endl;
-            for (auto bit : entry) {
-                *result = bit;
-                ++result;
-            }
-            // add p + entry[0] to dictionary
-            p.push_back(entry[0]);
-            string_table += p;
-            p = entry;
+        auto next = read_next_symbol(first, last, string_table.size() + 1);
+        if (not string_table.contains(deserialise(next))) {
+            print_bits(old);
+            s = string_table[deserialise(old)];
+            s.push_back(c);
         } else {
-            p.push_back(p[0]);
-            // print_bits(p);
-            // std::cout << std::endl;
-            for (auto bit : p) {
-                *result = bit;
-                ++result;
-            }
-            string_table += p;
+            print_bits(next);
+            s = string_table[deserialise(next)];
         }
+        std::cout << " -> ";
+        output_string(s, result);
+        std::cout << " (" << string_table.size() << ")" << std::endl;
+        c = s.front();
+        old.push_back(c);
+        string_table += old;
+        old = next;
     }
     return result;
 }
