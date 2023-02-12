@@ -1,1 +1,0 @@
-Some words will go into this file like so. These words might be compressed, depending on if the LZW algorithm I am coding up in this project is able to compress them or not. In general, it is difficult to predict whether LZW will compress a given string in advance.

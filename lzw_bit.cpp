@@ -69,8 +69,8 @@ public:
         shadow_code.back() = !shadow_code.back();
         if (contains(shadow_code)) {
             shadow_code.pop_back();
-            print_bits(shadow_code);
-            std::cout << " ";
+            // print_bits(shadow_code);
+            // std::cout << " ";
             _redundant_codes.push_back(shadow_code);
             // *this -= shadow_code;
         }
@@ -166,6 +166,7 @@ public:
         );
     }
     void print() const {
+        std::cout << "==========================================" << std::endl;
         for (auto entry : _entries) {
             if (entry.codeword.has_value()) {
                 std::cout << entry.codeword.value();
@@ -184,6 +185,8 @@ template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
     std::vector<bool> p;
+    string_table.print();
+    std::size_t counter = 0;
     for (; first != last; ++first) {
         bool c = *first;
         std::vector<bool> pc = p;
@@ -195,6 +198,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         } else {
             // print_bits(p);
             // std::cout << " -> ";
+            if (++counter > 80) { string_table.print(); }
             for (auto bit : serialise_for(*string_table[p], string_table.size())) {
                 // std::cout << bit;
                 *result = bit;
@@ -205,6 +209,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // FIME: Currently, there is no restriction, which can eat up all the
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
+            string_table.drop_oldest_redundant_code();
             string_table += pc;
             // string_table.drop_oldest_redundant_code();
             // std::cout << std::endl;
@@ -243,6 +248,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // write out last remaining symbol left on output
     // print_bits(p);
     // std::cout << " -> ";
+    string_table.print();
     for (auto bit : serialise_for(*string_table[p], string_table.size())) {
         // std::cout << bit;
         *result = bit;
@@ -285,12 +291,15 @@ void output_string(std::vector<bool> string, OutputIterator& result) {
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
+    string_table.print();
     auto w = read_next_symbol(first, last, string_table.size());
     if (w.empty()) { return result; } // no more symbols left to decode
     auto k = deserialise(w);
     std::vector<bool> entry;
     output_string(string_table[k], result);
+    std::size_t counter = 0;
     while (first != last) {
+        if (++counter > 80) { string_table.print(); }
         // +1 to table size is because every new symbol read adds another to the table
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 1);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
@@ -298,6 +307,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         // string_table.drop_oldest_redundant_code();
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         if (string_table.contains(k)) {
+            string_table.drop_oldest_redundant_code();
             entry = string_table[k];
             output_string(entry, result);
             auto extra_code = w;
@@ -342,6 +352,7 @@ int main(int, char* argv[]) {
     auto file_reader = std::istreambuf_iterator<char>(input_file);
     auto file_writer = std::ostreambuf_iterator<char>(output_file);
     if (mode == 'c') {
+        // std::cout << std::endl << std::endl << std::endl;
         lzw_bit_compress(
             char_bit_input_iterator<std::istreambuf_iterator, char>(file_reader),
             char_bit_input_iterator<std::istreambuf_iterator, char>(),
