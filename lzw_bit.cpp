@@ -83,7 +83,7 @@ public:
             entry->codeword = std::nullopt;
             // now advance through the rest of the entries after and reduce the codeword value for any that are uncoded
             for ( ; entry != _entries.end(); ++entry) {
-                if (entry->codeword) { entry->codeword = entry->codeword.value() + 1; }
+                if (entry->codeword.has_value()) { entry->codeword = entry->codeword.value() - 1; }
             }
         }
         return *this;
@@ -133,18 +133,24 @@ public:
             [](auto entry) { return entry.codeword.has_value(); }
         );
     }
+    void print() const {
+        for (auto entry : _entries) {
+            if (entry.codeword.has_value()) {
+                std::cout << entry.codeword.value();
+            }
+            std::cout << "\t";
+            print_bits(entry.string);
+            std::cout << std::endl;
+        }
+    }
 private:
     std::vector<string_entry> _entries;
 };
-
-#include <cassert>
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
     std::vector<bool> p;
-    std::size_t table_size = string_table.size();
-    std::size_t next_table_size = table_size;
     for (; first != last; ++first) {
         bool c = *first;
         std::vector<bool> pc = p;
@@ -154,46 +160,32 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         } else {
             // print_bits(p);
             // std::cout << " -> ";
-            for (auto bit : serialise_for(*string_table[p], table_size)) {
+            for (auto bit : serialise_for(*string_table[p], string_table.size())) {
                 // std::cout << bit;
                 *result = bit;
                 ++result;
             }
-            {
-                auto shorter = serialise_for(*string_table[p], table_size);
-                auto longer = serialise_for(*string_table[p], next_table_size);
-                if (longer.size() > shorter.size()) {
-                    shorter.insert(shorter.begin(), 0);
-                }
-                print_bits(shorter);
-                std::cout << " == ";
-                print_bits(longer);
-                std::cout << std::endl;
-                assert(shorter == longer);
-            }
-            // std::cout << " (" << table_size << " -> " << next_table_size << ")" << std::endl;
-            table_size = next_table_size; // delayed update to code table width
+            // std::cout << " (" << string_table.size() << ")" << std::endl;
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
             string_table += pc;
-            // std::cout << "Add code: ";
-            // print_bits(pc);
-            // std::cout << " (" << *string_table[pc] << ")" << std::endl;
-            next_table_size = string_table.size();
+            // std::cout << std::endl;
+            // string_table.print();
+            // std::cout << std::endl;
             // XXX: Optimisation, remove any "shadowed" redundant codes from table
-            // auto shadow_code = p;
-            // shadow_code.push_back(!c);
-            // if (string_table.contains(shadow_code)) {
-            //     // print_bits(p);
-            //     // std::cout << " shadowed by ";
-            //     // print_bits(pc);
-            //     // std::cout << " and ";
-            //     // print_bits(shadow_code);
-            //     // std::cout << " --removing" << std::endl;
-            //     string_table -= p;
-            // }
+            auto shadow_code = p;
+            shadow_code.push_back(!c);
+            if (string_table.contains(shadow_code)) {
+                // print_bits(p);
+                // std::cout << " shadowed by ";
+                // print_bits(pc);
+                // std::cout << " and ";
+                // print_bits(shadow_code);
+                // std::cout << " --removing" << std::endl;
+                string_table -= p;
+            }
             // }
             p = {c};
         }
@@ -201,23 +193,26 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // print_bits(p);
     // std::cout << " -> ";
     // send out the "END" code
-    // for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
-    //     // std::cout << bit;
-    //     *result = bit;
-    //     ++result;
-    // }
-    // std::cout << std::endl;
-    // restore all previously-dropped symbol codes
-    // string_table.restore_dropped_codes();
-    // write out last remaining symbol left on output
-    print_bits(p);
-    std::cout << " -> ";
-    for (auto bit : serialise_for(*string_table[p], table_size)) {
-        std::cout << bit;
+    for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
+        // std::cout << bit;
         *result = bit;
         ++result;
     }
-    std::cout << " (" << table_size << " -> " << next_table_size << ")" << std::endl;
+    // std::cout << std::endl;
+    std::cout << std::endl;
+    string_table.print();
+    std::cout << std::endl;
+    // restore all previously-dropped symbol codes
+    string_table.restore_dropped_codes();
+    // write out last remaining symbol left on output
+    // print_bits(p);
+    // std::cout << " -> ";
+    for (auto bit : serialise_for(*string_table[p], string_table.size())) {
+        // std::cout << bit;
+        *result = bit;
+        ++result;
+    }
+    std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
 }
 
