@@ -186,7 +186,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     CodeTable string_table;
     std::vector<bool> p;
     string_table.print();
-    std::size_t counter = 0;
+    // std::size_t counter = 0;
     for (; first != last; ++first) {
         bool c = *first;
         std::vector<bool> pc = p;
@@ -198,7 +198,8 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         } else {
             // print_bits(p);
             // std::cout << " -> ";
-            if (++counter > 80) { string_table.print(); }
+            // if (++counter > 80) { string_table.print(); }
+            string_table.print();
             for (auto bit : serialise_for(*string_table[p], string_table.size())) {
                 // std::cout << bit;
                 *result = bit;
@@ -248,12 +249,12 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
     // write out last remaining symbol left on output
     // print_bits(p);
     // std::cout << " -> ";
-    string_table.print();
-    for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-        // std::cout << bit;
-        *result = bit;
-        ++result;
-    }
+    // string_table.print();
+    // for (auto bit : serialise_for(*string_table[p], string_table.size())) {
+    //     // std::cout << bit;
+    //     *result = bit;
+    //     ++result;
+    // }
     // std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
 }
@@ -297,9 +298,10 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     auto k = deserialise(w);
     std::vector<bool> entry;
     output_string(string_table[k], result);
-    std::size_t counter = 0;
+    // std::size_t counter = 0;
     while (first != last) {
-        if (++counter > 80) { string_table.print(); }
+        // if (++counter > 80) { string_table.print(); }
+        string_table.print();
         // +1 to table size is because every new symbol read adds another to the table
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 1);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
