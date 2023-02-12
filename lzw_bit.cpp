@@ -174,18 +174,18 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // std::cout << std::endl;
             // string_table.print();
             // std::cout << std::endl;
-            // XXX: Optimisation, remove any "shadowed" redundant codes from table
-            auto shadow_code = p;
-            shadow_code.push_back(!c);
-            if (string_table.contains(shadow_code)) {
-                // print_bits(p);
-                // std::cout << " shadowed by ";
-                // print_bits(pc);
-                // std::cout << " and ";
-                // print_bits(shadow_code);
-                // std::cout << " --removing" << std::endl;
-                string_table -= p;
-            }
+            // // XXX: Optimisation, remove any "shadowed" redundant codes from table
+            // auto shadow_code = p;
+            // shadow_code.push_back(!c);
+            // if (string_table.contains(shadow_code)) {
+            //     // print_bits(p);
+            //     // std::cout << " shadowed by ";
+            //     // print_bits(pc);
+            //     // std::cout << " and ";
+            //     // print_bits(shadow_code);
+            //     // std::cout << " --removing" << std::endl;
+            //     string_table -= p;
+            // }
             // }
             p = {c};
         }
@@ -199,11 +199,11 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         ++result;
     }
     // std::cout << std::endl;
-    std::cout << std::endl;
-    string_table.print();
-    std::cout << std::endl;
+    // std::cout << std::endl;
+    // string_table.print();
+    // std::cout << std::endl;
     // restore all previously-dropped symbol codes
-    string_table.restore_dropped_codes();
+    // string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
     // print_bits(p);
     // std::cout << " -> ";
@@ -212,7 +212,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         *result = bit;
         ++result;
     }
-    std::cout << " (" << string_table.size() << ")" << std::endl;
+    // std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
 }
 
