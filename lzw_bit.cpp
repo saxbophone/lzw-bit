@@ -306,13 +306,13 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         k = deserialise(next_symbol);
         // string_table.drop_oldest_redundant_code();
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
+        // string_table.drop_oldest_redundant_code();
         if (string_table.contains(k)) {
             string_table.drop_oldest_redundant_code();
             entry = string_table[k];
             output_string(entry, result);
             auto extra_code = w;
             extra_code.push_back(entry[0]);
-            // string_table.drop_oldest_redundant_code();
             string_table += extra_code;
             w = entry;
         } else {
@@ -320,8 +320,8 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             entry.push_back(w[0]);
             output_string(entry, result);
             // string_table.drop_all_redundant_codes();
-            // string_table.drop_oldest_redundant_code();
             string_table += entry;
+            string_table.drop_oldest_redundant_code();
             w = entry;
         }
     }
