@@ -37,6 +37,7 @@ uintmax_t deserialise(std::vector<bool> bits) {
 }
 
 #include <algorithm>
+#include <deque>
 #include <memory>
 #include <optional>
 
@@ -56,6 +57,23 @@ public:
         // XXX: not checking if code already is present, BE CAREFUL!
         string_entry entry = {string, size()};
         _entries.push_back(entry);
+        // XXX: Optimisation, identify any "shadowed" redundant codes from table
+        // NOTE: both encoder and decoder can identify these perfectly in the
+        // same sequence, however removing codes at the same point in both means
+        // the decoder can't decode the encoder's output.
+        // Don't think it's because the decoder has to delay (already tried that)
+        // think it might be that the encoder has to delay codes to produce a
+        // decodable file?
+        // anyway, we're providing facility to drop codes in a separate method
+        auto shadow_code = string;
+        shadow_code.back() = !shadow_code.back();
+        if (contains(shadow_code)) {
+            shadow_code.pop_back();
+            print_bits(shadow_code);
+            std::cout << " ";
+            _redundant_codes.push_back(shadow_code);
+            // *this -= shadow_code;
+        }
         return *this;
     }
     // find by string and return an iterator, which might be .end()
@@ -111,6 +129,20 @@ public:
     std::vector<bool> operator[](std::size_t codeword) {
         return find(codeword)->string;
     }
+    // uncodes the least recently identified redundant code
+    void drop_oldest_redundant_code() {
+        if (not _redundant_codes.empty()) {
+            *this -= _redundant_codes.front();
+            _redundant_codes.pop_front();
+        }
+    }
+    // uncodes all identified redundant codes
+    void drop_all_redundant_codes() {
+        for (auto redundant : _redundant_codes) {
+            *this -= redundant;
+        }
+        _redundant_codes.clear();
+    }
     // give codes back to any uncoded (dropped) strings from the table
     // NOTE: strings are not guaranteed to get back their original codewords
     void restore_dropped_codes() {
@@ -145,6 +177,7 @@ public:
     }
 private:
     std::vector<string_entry> _entries;
+    std::deque<std::vector<bool>> _redundant_codes;
 };
 
 template <class InputIterator, class OutputIterator>
@@ -156,6 +189,8 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         std::vector<bool> pc = p;
         pc.push_back(c);
         if (string_table.contains(pc)) {
+            // now that we've got a valid code, this is an appropriate time to drop some?
+            // string_table.drop_oldest_redundant_code();
             p = pc;
         } else {
             // print_bits(p);
@@ -171,6 +206,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
             string_table += pc;
+            // string_table.drop_oldest_redundant_code();
             // std::cout << std::endl;
             // string_table.print();
             // std::cout << std::endl;
@@ -259,18 +295,22 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 1);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
         k = deserialise(next_symbol);
+        // string_table.drop_oldest_redundant_code();
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         if (string_table.contains(k)) {
             entry = string_table[k];
             output_string(entry, result);
             auto extra_code = w;
             extra_code.push_back(entry[0]);
+            // string_table.drop_oldest_redundant_code();
             string_table += extra_code;
             w = entry;
         } else {
             entry = w;
             entry.push_back(w[0]);
             output_string(entry, result);
+            // string_table.drop_all_redundant_codes();
+            // string_table.drop_oldest_redundant_code();
             string_table += entry;
             w = entry;
         }
@@ -318,6 +358,7 @@ int main(int, char* argv[]) {
     }
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
-    std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
+    // std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
+    std::cout << std::endl;
     // files close automatically thanks to RAII
 }

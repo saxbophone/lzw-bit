@@ -1,0 +1,22 @@
+read a character k;
+   output k;
+   w = k;
+   entry = empty string;
+   while ( read a character k )    
+  /* k could be a character or a code. */
+        {
+         if k exists in the dictionary
+            {
+             entry = dictionary entry for k;
+             output entry;
+             add w + entry[0] to dictionary;
+             w = entry;
+            }
+         else
+            {
+             entry = w + w[0];
+             output entry;
+             add entry to dictionary;
+             w = entry;
+            }
+        }
