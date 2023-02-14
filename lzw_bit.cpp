@@ -43,11 +43,11 @@ uintmax_t deserialise(std::vector<bool> bits) {
 
 class CodeTable {
 public:
-    // B+ tree we use for storing the code table nodes
+    // B+ tree we use for storing the code table nodes --this is most useful for converting strings to codewords
     struct Node {
         Node* parent; // non-owning ref to parent, only tree parent has none
         std::shared_ptr<Node> children[2]; // owning refs to children for 0 and 1 paths
-        std::weak_ptr<Node> next; // non-owning ref to next node, if any
+        std::weak_ptr<Node> next; // non-owning ref to next node, if any --regardless of whether next node is coded or not
         bool bit; // the bit in the string at the position represented by this node
         std::optional<std::size_t> codeword; // only allowed if not both children exist, else forbidden
         std::size_t length; // how many bits long is the bitstring whose end is marked by this node
@@ -58,12 +58,12 @@ public:
           , length(0) {
             children[0]->next = children[1];
         }
-        // ctor for use when initialising the code table with first two entries
-        Node(Node* parent, bool bit, std::size_t codeword)
+        // ctor for use when initialising the code table with first two entries or adding new entries
+        Node(Node* parent, bool bit, std::size_t codeword, std::size_t length=1)
           : parent(parent)
           , bit(bit)
           , codeword(codeword)
-          , length(1)
+          , length(length)
           {}
         // ease of access of the node for the next bit
         std::shared_ptr<Node> operator[](bool bit) {
@@ -81,76 +81,67 @@ public:
             return bits;
         }
     };
-    // not the most efficient structure for searching, but it'll do for now
-    // whilst we get the logic sorted out
-    struct string_entry {
-        std::vector<bool> string;
-        std::optional<std::size_t> codeword;
-    };
+    // type declaration for the "other side" of the lookup --converting codewords to strings
+    using LookupTable = std::deque<std::shared_ptr<Node>>;
     // default constructor, auto-initialises a code table with all 1-bit strings
     // and a special "EOF" symbol
-    CodeTable() : _entries{{{0}, 0}, {{1}, 1}} {}
+    CodeTable() : _index{_tree->children[0], _tree->children[1]} {}
     // use codetable += <bit string> to add a code to the table
     CodeTable& operator+=(const std::vector<bool>& string) {
         // XXX: not checking if code already is present, BE CAREFUL!
-        string_entry entry = {string, size()};
-        _entries.push_back(entry);
-        // XXX: Optimisation, identify any "shadowed" redundant codes from table
-        // NOTE: both encoder and decoder can identify these perfectly in the
-        // same sequence, however removing codes at the same point in both means
-        // the decoder can't decode the encoder's output.
-        // Don't think it's because the decoder has to delay (already tried that)
-        // think it might be that the encoder has to delay codes to produce a
-        // decodable file?
-        // anyway, we're providing facility to drop codes in a separate method
-        auto shadow_code = string;
-        shadow_code.back() = !shadow_code.back();
-        if (contains(shadow_code)) {
-            shadow_code.pop_back();
-            // print_bits(shadow_code);
-            // std::cout << " ";
-            _redundant_codes.push_back(shadow_code);
-            // *this -= shadow_code;
+        auto prefix = string;
+        prefix.pop_back();
+        if (auto previous = find(prefix)) {
+            bool bit = string.back();
+            // WARN: this *WILL* overwrite existing nodes if not used correctly
+            auto new_node = std::make_shared<Node>(previous.get(), bit, _index.size(), string.size());
+            previous->children[bit] = new_node;
+            // link previous last Node to this new one
+            _index.back()->next = new_node;
+            _index.push_back(new_node);
+            // XXX: Optimisation, identify any "shadowed" redundant codes from table
+            if (previous->codeword.has_value() and previous->children[!bit]) {
+                _redundant_codes.push_back(previous->codeword.value());
+            }
+        } else {
+            std::cerr << "FATAL ERROR --tried to add new code not prefixed by anything" << std::endl;
         }
         return *this;
     }
-    // find by string and return an iterator, which might be .end()
-    std::vector<string_entry>::iterator find(const std::vector<bool>& string) {
-        auto first = _entries.begin();
-        for ( ; first != _entries.end(); ++first) {
-            if (first->string == string) { break; }
+    // find by string, may return empty pointer
+    std::shared_ptr<Node> find(const std::vector<bool>& string) {
+        std::shared_ptr<Node> cursor = _tree;
+        for (auto bit : string) {
+            cursor = cursor->children[bit];
+            if (not cursor) { break; }
         }
-        return first;
+        return cursor;
     }
-    // find by codeword and return an iterator, which might be .end()
-    std::vector<string_entry>::iterator find(std::size_t codeword) {
-        auto first = _entries.begin();
-        for ( ; first != _entries.end(); ++first) {
-            if (first->codeword == codeword) { break; }
-        }
-        return first;
+    // find by codeword, may return empty pointer
+    std::shared_ptr<Node> find(std::size_t codeword) {
+        if (codeword > _index.size() - 1) { return {}; }
+        return _index[codeword];
     }
     // remove the code for the given string from the table
     // NOTE: the string remains present in the table but is now uncoded
-    CodeTable& operator-=(const std::vector<bool>& string) {
-        auto entry = find(string);
-        if (entry != _entries.end()) {
-            // uncode the entry
-            entry->codeword = std::nullopt;
-            // now advance through the rest of the entries after and reduce the codeword value for any that are uncoded
-            for ( ; entry != _entries.end(); ++entry) {
-                if (entry->codeword.has_value()) { entry->codeword = entry->codeword.value() - 1; }
-            }
+    CodeTable& operator-=(std::size_t codeword) {
+        auto entry = _index[codeword];
+        // uncode the entry
+        _index.erase(_index.begin() + codeword);
+        entry->codeword = std::nullopt;
+        // now advance through the rest of the entries after and reduce the codeword value for any that are uncoded
+        for (auto next = entry->next.lock(); next; next = next->next.lock()) {
+            if (next->codeword.has_value()) { next->codeword = next->codeword.value() - 1; }
         }
         return *this;
     }
     // check to see if a string is in the table
     bool contains(const std::vector<bool>& string) {
-        return find(string) != _entries.end();
+        return (bool)find(string);
     }
     // check to see if a code is in the table
     bool contains(std::size_t codeword) {
-        return find(codeword) != _entries.end();
+        return codeword < _index.size();
     }
     // retrieve the codeword for the given bit string, or std::nullopt if the codeword is uncoded
     // (NOTE if it's not present at all, which is different to "uncoded", an error is raised)
@@ -159,13 +150,9 @@ public:
     std::optional<std::size_t> operator[](const std::vector<bool>& string) {
         return find(string)->codeword;
     }
-    // retreive the codeword used for the special "End of Data" symbol
-    std::size_t end_code() const {
-        return size() - 1;
-    }
     // retrieve the bit-string encoded by the given codeword
     std::vector<bool> operator[](std::size_t codeword) {
-        return find(codeword)->string;
+        return find(codeword)->bitstring();
     }
     // uncodes the least recently identified redundant code
     void drop_oldest_redundant_code() {
@@ -174,19 +161,16 @@ public:
             _redundant_codes.pop_front();
         }
     }
-    // uncodes all identified redundant codes
-    void drop_all_redundant_codes() {
-        for (auto redundant : _redundant_codes) {
-            *this -= redundant;
-        }
-        _redundant_codes.clear();
-    }
     // give codes back to any uncoded (dropped) strings from the table
     // NOTE: strings are not guaranteed to get back their original codewords
     void restore_dropped_codes() {
         // simplest thing to do is just re-fill the codewords with successive values
-        for (std::size_t i = 0; i < _entries.size(); i++) {
-            _entries[i].codeword = i;
+        std::size_t i = 0;
+        _index.clear();
+        for (auto cursor = _tree->children[0]; cursor; cursor = cursor->next.lock()) {
+            cursor->codeword = i;
+            _index.push_back(cursor);
+            ++i;
         }
     }
     // returns the number of *coded* strings in the table. This can be less than
@@ -195,40 +179,35 @@ public:
     // Knowing the number of assigned codes is essential for serialising and
     // deserialising codewords in a space-efficient way.
     std::size_t size() const {
-        // count only the non-uncoded entries
-        // TODO: and then add 1 (for the implicit "END" symbol)
-        return std::count_if(
-            _entries.begin(),
-            _entries.end(),
-            [](auto entry) { return entry.codeword.has_value(); }
-        );
+        return _index.size(); // index only stores entries for coded strings
     }
     void print() const {
         std::cout << "==========================================" << std::endl;
-        for (auto entry : _entries) {
-            if (entry.codeword.has_value()) {
-                std::cout << entry.codeword.value();
+        for (auto entry = _tree->children[0]; entry; entry = entry->next.lock()) {
+            if (entry->codeword.has_value()) {
+                std::cout << entry->codeword.value();
             }
             std::cout << "\t";
-            print_bits(entry.string);
+            print_bits(entry->bitstring());
             std::cout << std::endl;
         }
     }
 private:
-    std::vector<string_entry> _entries;
-    std::deque<std::vector<bool>> _redundant_codes;
+    // useful for converting strings to codewords, and stores the actual code table
+    std::shared_ptr<Node> _tree = std::make_shared<Node>();
+    // used only for converting codewords to strings, and is non-owning, relying upon the tree for storage
+    LookupTable _index;
+    // sequence of codes for future removal
+    // TODO: consider converting to optional of just one element, don't think we'll ever have more than one at a time?
+    std::deque<std::size_t> _redundant_codes;
 };
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
-    CodeTable::Node top;
-    print_bits(top.children[0]->bitstring());
-    std::cout << " ";
-    print_bits(top.children[1]->bitstring());
-    std::cout << std::endl;
     CodeTable string_table;
     std::vector<bool> p;
     for (; first != last; ++first) {
+        // string_table.print();
         bool c = *first;
         std::vector<bool> pc = p;
         pc.push_back(c);
@@ -253,6 +232,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // }
             p = {c};
         }
+        // string_table.print();
     }
     // print_bits(p);
     // std::cout << " -> ";
@@ -319,6 +299,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     output_string(w, result);
     // std::cout << std::endl;
     while (first != last) {
+        // string_table.print();
         // +1 to table size is because every new symbol read adds another to the table
         // additional +1 is to account for the special "END" symbol, which is not in table
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 2);
@@ -348,6 +329,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             w = entry;
         }
         // std::cout << std::endl;
+        // string_table.print();
     }
     return result;
 }
