@@ -313,6 +313,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         if (next_symbol.empty()) { break; } // no more symbols left to decode
         k = deserialise(next_symbol);
         if (k == string_table.size() + 1) { // "END" symbol encountered
+            std::cout << " ";
             string_table.restore_dropped_codes();
             continue;
         }
