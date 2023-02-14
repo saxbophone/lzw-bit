@@ -200,7 +200,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
                 *result = bit;
                 ++result;
             }
-            std::cout << std::endl
+            std::cout << std::endl;
             string_table.drop_oldest_redundant_code();
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
