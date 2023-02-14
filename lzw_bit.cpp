@@ -43,6 +43,44 @@ uintmax_t deserialise(std::vector<bool> bits) {
 
 class CodeTable {
 public:
+    // B+ tree we use for storing the code table nodes
+    struct Node {
+        Node* parent; // non-owning ref to parent, only tree parent has none
+        std::shared_ptr<Node> children[2]; // owning refs to children for 0 and 1 paths
+        std::weak_ptr<Node> next; // non-owning ref to next node, if any
+        bool bit; // the bit in the string at the position represented by this node
+        std::optional<std::size_t> codeword; // only allowed if not both children exist, else forbidden
+        std::size_t length; // how many bits long is the bitstring whose end is marked by this node
+
+        // ctor for use in building the special non-bit node that represents the trunk of the tree
+        Node()
+          : children{std::make_shared<Node>(this, 0, 0), std::make_shared<Node>(this, 1, 1)}
+          , length(0) {
+            children[0]->next = children[1];
+        }
+        // ctor for use when initialising the code table with first two entries
+        Node(Node* parent, bool bit, std::size_t codeword)
+          : parent(parent)
+          , bit(bit)
+          , codeword(codeword)
+          , length(1)
+          {}
+        // ease of access of the node for the next bit
+        std::shared_ptr<Node> operator[](bool bit) {
+            return children[bit];
+        }
+        // get the bitstring for this node
+        std::vector<bool> bitstring() const {
+            std::vector<bool> bits(length);
+            const Node* cursor = this;
+            // WARN: this loop will segfault if length is not correct!
+            for (auto it = bits.rbegin(); it != bits.rend(); ++it) {
+                *it = cursor->bit;
+                cursor = cursor->parent;
+            }
+            return bits;
+        }
+    };
     // not the most efficient structure for searching, but it'll do for now
     // whilst we get the logic sorted out
     struct string_entry {
@@ -183,6 +221,11 @@ private:
 
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
+    CodeTable::Node top;
+    print_bits(top.children[0]->bitstring());
+    std::cout << " ";
+    print_bits(top.children[1]->bitstring());
+    std::cout << std::endl;
     CodeTable string_table;
     std::vector<bool> p;
     for (; first != last; ++first) {
