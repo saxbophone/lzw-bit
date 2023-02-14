@@ -310,12 +310,12 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         // string_table.drop_oldest_redundant_code();
         if (string_table.contains(k)) {
-            string_table.drop_oldest_redundant_code();
             entry = string_table[k];
             output_string(entry, result);
             auto extra_code = w;
             extra_code.push_back(entry[0]);
             string_table += extra_code;
+            string_table.drop_oldest_redundant_code();
             w = entry;
         } else {
             entry = w;
