@@ -192,15 +192,15 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         if (string_table.contains(pc)) {
             p = pc;
         } else {
-            print_bits(p);
-            std::cout << " -> ";
+            // print_bits(p);
+            // std::cout << " -> ";
             // NOTE: +1 is to account for the special "END" symbol, not in table
             for (auto bit : serialise_for(*string_table[p], string_table.size() + 1)) {
-                std::cout << bit;
+                // std::cout << bit;
                 *result = bit;
                 ++result;
             }
-            std::cout << std::endl;
+            // std::cout << std::endl;
             string_table.drop_oldest_redundant_code();
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
@@ -211,24 +211,24 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             p = {c};
         }
     }
-    print_bits(p);
-    std::cout << " -> ";
+    // print_bits(p);
+    // std::cout << " -> ";
     // send out the "END" code
     for (auto bit : serialise_for(string_table.size(), string_table.size() + 1)) {
-        std::cout << bit;
+        // std::cout << bit;
         *result = bit;
         ++result;
     }
-    std::cout << " ";
+    // std::cout << " ";
     // restore all previously-dropped symbol codes
     string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
     for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-        std::cout << bit;
+        // std::cout << bit;
         *result = bit;
         ++result;
     }
-    std::cout << std::endl;
+    // std::cout << std::endl;
     return result;
 }
 
@@ -249,7 +249,7 @@ std::vector<bool> read_next_symbol(InputIterator& first, InputIterator& last, st
         codeword_bits[i] = *first;
         ++first;
     }
-    print_bits(codeword_bits);
+    // print_bits(codeword_bits);
     // now we have a codeword as a sequence of bits, convert to codeword and look up
     return codeword_bits;
 }
@@ -257,7 +257,7 @@ std::vector<bool> read_next_symbol(InputIterator& first, InputIterator& last, st
 template <class OutputIterator>
 void output_string(std::vector<bool> string, OutputIterator& result) {
     for (auto bit : string) {
-        std::cout << bit;
+        // std::cout << bit;
         *result = bit;
         ++result;
     }
@@ -271,10 +271,10 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     if (w.empty()) { return result; } // no more symbols left to decode
     auto k = deserialise(w);
     std::vector<bool> entry;
-    std::cout << " -> ";
+    // std::cout << " -> ";
     w = string_table[k];
     output_string(w, result);
-    std::cout << std::endl;
+    // std::cout << std::endl;
     while (first != last) {
         // +1 to table size is because every new symbol read adds another to the table
         // additional +1 is to account for the special "END" symbol, which is not in table
@@ -282,11 +282,11 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
         if (next_symbol.empty()) { break; } // no more symbols left to decode
         k = deserialise(next_symbol);
         if (k == string_table.size() + 1) { // "END" symbol encountered
-            std::cout << " ";
+            // std::cout << " ";
             string_table.restore_dropped_codes();
             continue;
         }
-        std::cout << " -> ";
+        // std::cout << " -> ";
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         if (string_table.contains(k)) {
             entry = string_table[k];
@@ -304,7 +304,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             string_table.drop_oldest_redundant_code();
             w = entry;
         }
-        std::cout << std::endl;
+        // std::cout << std::endl;
     }
     return result;
 }
