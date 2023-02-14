@@ -185,50 +185,28 @@ template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
     std::vector<bool> p;
-    // string_table.print();
-    // std::size_t counter = 0;
     for (; first != last; ++first) {
         bool c = *first;
         std::vector<bool> pc = p;
         pc.push_back(c);
         if (string_table.contains(pc)) {
-            // now that we've got a valid code, this is an appropriate time to drop some?
-            // string_table.drop_oldest_redundant_code();
             p = pc;
         } else {
             print_bits(p);
             std::cout << " -> ";
-            // if (++counter > 80) { string_table.print(); }
-            // string_table.print();
+            // NOTE: +1 is to account for the special "END" symbol, not in table
             for (auto bit : serialise_for(*string_table[p], string_table.size() + 1)) {
                 std::cout << bit;
                 *result = bit;
                 ++result;
             }
-            std::cout << std::endl;
-            // std::cout << " (" << string_table.size() << ")" << std::endl;
+            std::cout << std::endl
+            string_table.drop_oldest_redundant_code();
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
             // memory for large files. We should maybe consider changing this...
             // if (string_table.size() < 256) {
-            string_table.drop_oldest_redundant_code();
             string_table += pc;
-            // string_table.drop_oldest_redundant_code();
-            // std::cout << std::endl;
-            // string_table.print();
-            // std::cout << std::endl;
-            // // XXX: Optimisation, remove any "shadowed" redundant codes from table
-            // auto shadow_code = p;
-            // shadow_code.push_back(!c);
-            // if (string_table.contains(shadow_code)) {
-            //     // print_bits(p);
-            //     // std::cout << " shadowed by ";
-            //     // print_bits(pc);
-            //     // std::cout << " and ";
-            //     // print_bits(shadow_code);
-            //     // std::cout << " --removing" << std::endl;
-            //     string_table -= p;
-            // }
             // }
             p = {c};
         }
@@ -242,22 +220,15 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
         ++result;
     }
     std::cout << " ";
-    // std::cout << std::endl;
-    // string_table.print();
-    // std::cout << std::endl;
     // restore all previously-dropped symbol codes
     string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
-    // print_bits(p);
-    // std::cout << " -> ";
-    // string_table.print();
     for (auto bit : serialise_for(*string_table[p], string_table.size())) {
         std::cout << bit;
         *result = bit;
         ++result;
     }
     std::cout << std::endl;
-    // std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
 }
 
@@ -295,7 +266,7 @@ void output_string(std::vector<bool> string, OutputIterator& result) {
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
-    // string_table.print();
+    // NOTE: +1 is to account for the special "END" symbol, not in table
     auto w = read_next_symbol(first, last, string_table.size() + 1);
     if (w.empty()) { return result; } // no more symbols left to decode
     auto k = deserialise(w);
@@ -304,11 +275,9 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     w = string_table[k];
     output_string(w, result);
     std::cout << std::endl;
-    // std::size_t counter = 0;
     while (first != last) {
-        // if (++counter > 80) { string_table.print(); }
-        // string_table.print();
         // +1 to table size is because every new symbol read adds another to the table
+        // additional +1 is to account for the special "END" symbol, which is not in table
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 2);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
         k = deserialise(next_symbol);
@@ -317,10 +286,8 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             string_table.restore_dropped_codes();
             continue;
         }
-        // string_table.drop_oldest_redundant_code();
-        // TODO: query our data structure more sympathetically. These two lines are very wasteful!
-        // string_table.drop_oldest_redundant_code();
         std::cout << " -> ";
+        // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         if (string_table.contains(k)) {
             entry = string_table[k];
             output_string(entry, result);
@@ -333,7 +300,6 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             entry = w;
             entry.push_back(w[0]);
             output_string(entry, result);
-            // string_table.drop_all_redundant_codes();
             string_table += entry;
             string_table.drop_oldest_redundant_code();
             w = entry;
