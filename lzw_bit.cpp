@@ -196,15 +196,16 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // string_table.drop_oldest_redundant_code();
             p = pc;
         } else {
-            // print_bits(p);
-            // std::cout << " -> ";
+            print_bits(p);
+            std::cout << " -> ";
             // if (++counter > 80) { string_table.print(); }
             // string_table.print();
-            for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-                // std::cout << bit;
+            for (auto bit : serialise_for(*string_table[p], string_table.size() + 1)) {
+                std::cout << bit;
                 *result = bit;
                 ++result;
             }
+            std::cout << std::endl;
             // std::cout << " (" << string_table.size() << ")" << std::endl;
             // NOTE: If you want to restrict the string table size, here's where you'd do it
             // FIME: Currently, there is no restriction, which can eat up all the
@@ -232,29 +233,30 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             p = {c};
         }
     }
-    // print_bits(p);
-    // std::cout << " -> ";
+    print_bits(p);
+    std::cout << " -> ";
     // send out the "END" code
-    // for (auto bit : serialise_for(string_table.end_code(), string_table.size())) {
-    //     // std::cout << bit;
-    //     *result = bit;
-    //     ++result;
-    // }
-    // std::cout << std::endl;
+    for (auto bit : serialise_for(string_table.size(), string_table.size() + 1)) {
+        std::cout << bit;
+        *result = bit;
+        ++result;
+    }
+    std::cout << " ";
     // std::cout << std::endl;
     // string_table.print();
     // std::cout << std::endl;
     // restore all previously-dropped symbol codes
-    // string_table.restore_dropped_codes();
+    string_table.restore_dropped_codes();
     // write out last remaining symbol left on output
     // print_bits(p);
     // std::cout << " -> ";
     // string_table.print();
-    // for (auto bit : serialise_for(*string_table[p], string_table.size())) {
-    //     // std::cout << bit;
-    //     *result = bit;
-    //     ++result;
-    // }
+    for (auto bit : serialise_for(*string_table[p], string_table.size())) {
+        std::cout << bit;
+        *result = bit;
+        ++result;
+    }
+    std::cout << std::endl;
     // std::cout << " (" << string_table.size() << ")" << std::endl;
     return result;
 }
@@ -276,6 +278,7 @@ std::vector<bool> read_next_symbol(InputIterator& first, InputIterator& last, st
         codeword_bits[i] = *first;
         ++first;
     }
+    print_bits(codeword_bits);
     // now we have a codeword as a sequence of bits, convert to codeword and look up
     return codeword_bits;
 }
@@ -283,7 +286,7 @@ std::vector<bool> read_next_symbol(InputIterator& first, InputIterator& last, st
 template <class OutputIterator>
 void output_string(std::vector<bool> string, OutputIterator& result) {
     for (auto bit : string) {
-        // std::cout << bit;
+        std::cout << bit;
         *result = bit;
         ++result;
     }
@@ -293,22 +296,30 @@ template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
     // string_table.print();
-    auto w = read_next_symbol(first, last, string_table.size());
+    auto w = read_next_symbol(first, last, string_table.size() + 1);
     if (w.empty()) { return result; } // no more symbols left to decode
     auto k = deserialise(w);
     std::vector<bool> entry;
-    output_string(string_table[k], result);
+    std::cout << " -> ";
+    w = string_table[k];
+    output_string(w, result);
+    std::cout << std::endl;
     // std::size_t counter = 0;
     while (first != last) {
         // if (++counter > 80) { string_table.print(); }
         // string_table.print();
         // +1 to table size is because every new symbol read adds another to the table
-        auto next_symbol = read_next_symbol(first, last, string_table.size() + 1);
+        auto next_symbol = read_next_symbol(first, last, string_table.size() + 2);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
         k = deserialise(next_symbol);
+        if (k == string_table.size() + 1) { // "END" symbol encountered
+            string_table.restore_dropped_codes();
+            continue;
+        }
         // string_table.drop_oldest_redundant_code();
         // TODO: query our data structure more sympathetically. These two lines are very wasteful!
         // string_table.drop_oldest_redundant_code();
+        std::cout << " -> ";
         if (string_table.contains(k)) {
             entry = string_table[k];
             output_string(entry, result);
@@ -326,6 +337,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             string_table.drop_oldest_redundant_code();
             w = entry;
         }
+        std::cout << std::endl;
     }
     return result;
 }
