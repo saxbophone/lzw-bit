@@ -185,7 +185,7 @@ template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
     std::vector<bool> p;
-    string_table.print();
+    // string_table.print();
     // std::size_t counter = 0;
     for (; first != last; ++first) {
         bool c = *first;
@@ -199,7 +199,7 @@ OutputIterator lzw_bit_compress(InputIterator first, InputIterator last, OutputI
             // print_bits(p);
             // std::cout << " -> ";
             // if (++counter > 80) { string_table.print(); }
-            string_table.print();
+            // string_table.print();
             for (auto bit : serialise_for(*string_table[p], string_table.size())) {
                 // std::cout << bit;
                 *result = bit;
@@ -292,7 +292,7 @@ void output_string(std::vector<bool> string, OutputIterator& result) {
 template <class InputIterator, class OutputIterator>
 OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, OutputIterator result) {
     CodeTable string_table;
-    string_table.print();
+    // string_table.print();
     auto w = read_next_symbol(first, last, string_table.size());
     if (w.empty()) { return result; } // no more symbols left to decode
     auto k = deserialise(w);
@@ -301,7 +301,7 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
     // std::size_t counter = 0;
     while (first != last) {
         // if (++counter > 80) { string_table.print(); }
-        string_table.print();
+        // string_table.print();
         // +1 to table size is because every new symbol read adds another to the table
         auto next_symbol = read_next_symbol(first, last, string_table.size() + 1);
         if (next_symbol.empty()) { break; } // no more symbols left to decode
@@ -371,7 +371,7 @@ int main(int, char* argv[]) {
     }
     std::size_t input_size = input_file.tellg();
     std::size_t output_size = output_file.tellp();
-    // std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
-    std::cout << std::endl;
+    std::cout << input_size << " bytes -> " << output_size << " bytes (" << std::ceil((double)output_size / input_size * 100) << "%)" << std::endl;
+    // std::cout << std::endl;
     // files close automatically thanks to RAII
 }
