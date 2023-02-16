@@ -311,9 +311,8 @@ OutputIterator lzw_bit_decompress(InputIterator first, InputIterator last, Outpu
             continue;
         }
         // std::cout << " -> ";
-        // TODO: query our data structure more sympathetically. These two lines are very wasteful!
-        if (string_table.contains(k)) {
-            entry = string_table[k];
+        if (auto found = string_table.find(k)) {
+            entry = found->bitstring();
             output_string(entry, result);
             auto extra_code = w;
             extra_code.push_back(entry[0]);
