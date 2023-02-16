@@ -42,3 +42,7 @@ from math import prod
 
 def bitlength(iterable):
     return sum(prod(it).bit_length() for it in iterable)
+
+
+for m, d in zip_longest(Max.determine_packing(range(3, 101)), Dense.determine_packing(range(33, 101)), fillvalue=()):
+    print(m, d)
